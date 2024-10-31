@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,7 +23,6 @@ import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferFactory;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
-import org.springframework.core.io.buffer.PooledDataBuffer;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.AntPathMatcher;
@@ -79,16 +78,14 @@ public class InstancesProxyController {
 			RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS })
 	public Mono<Void> endpointProxy(@PathVariable("instanceId") String instanceId, ServerHttpRequest request,
 			ServerHttpResponse response) {
-		String endpointLocalPath = this.getEndpointLocalPath(this.adminContextPath + INSTANCE_MAPPED_PATH, request);
-		URI uri = UriComponentsBuilder.fromPath(endpointLocalPath).query(request.getURI().getRawQuery()).build(true)
-				.toUri();
+		InstanceWebProxy.ForwardRequest fwdRequest = createForwardRequest(request, request.getBody(),
+				this.adminContextPath + INSTANCE_MAPPED_PATH);
 
-		return this.instanceWebProxy.forward(this.registry.getInstance(InstanceId.of(instanceId)), uri,
-				request.getMethod(), this.httpHeadersFilter.filterHeaders(request.getHeaders()),
-				BodyInserters.fromDataBuffers(request.getBody())).flatMap((clientResponse) -> {
+		return this.instanceWebProxy.forward(this.registry.getInstance(InstanceId.of(instanceId)), fwdRequest,
+				(clientResponse) -> {
 					response.setStatusCode(clientResponse.statusCode());
 					response.getHeaders()
-							.addAll(this.httpHeadersFilter.filterHeaders(clientResponse.headers().asHttpHeaders()));
+						.addAll(this.httpHeadersFilter.filterHeaders(clientResponse.headers().asHttpHeaders()));
 					return response.writeAndFlushWith(clientResponse.body(BodyExtractors.toDataBuffers()).window(1));
 				});
 	}
@@ -98,20 +95,36 @@ public class InstancesProxyController {
 			RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS })
 	public Flux<InstanceWebProxy.InstanceResponse> endpointProxy(
 			@PathVariable("applicationName") String applicationName, ServerHttpRequest request) {
-		String endpointLocalPath = this.getEndpointLocalPath(this.adminContextPath + APPLICATION_MAPPED_PATH, request);
-		URI uri = UriComponentsBuilder.fromPath(endpointLocalPath).query(request.getURI().getRawQuery()).build(true)
-				.toUri();
 
-		Flux<DataBuffer> cachedBody = request.getBody().map((b) -> this.bufferFactory.wrap(b.asByteBuffer()))
-				.doOnDiscard(PooledDataBuffer.class, DataBufferUtils::release).cache();
+		Flux<DataBuffer> cachedBody = request.getBody().map((b) -> {
+			int readableByteCount = b.readableByteCount();
+			DataBuffer dataBuffer = this.bufferFactory.allocateBuffer(readableByteCount);
+			dataBuffer.write(b.asByteBuffer());
+			DataBufferUtils.release(b);
+			return dataBuffer;
+		}).cache();
 
-		return this.instanceWebProxy.forward(this.registry.getInstances(applicationName), uri, request.getMethod(),
-				this.httpHeadersFilter.filterHeaders(request.getHeaders()), BodyInserters.fromDataBuffers(cachedBody));
+		InstanceWebProxy.ForwardRequest fwdRequest = createForwardRequest(request, cachedBody,
+				this.adminContextPath + APPLICATION_MAPPED_PATH);
+
+		return this.instanceWebProxy.forward(this.registry.getInstances(applicationName), fwdRequest);
 	}
 
-	private String getEndpointLocalPath(String endpointPathPattern, ServerHttpRequest request) {
+	private InstanceWebProxy.ForwardRequest createForwardRequest(ServerHttpRequest request, Flux<DataBuffer> cachedBody,
+			String pathPattern) {
+		String localPath = this.getLocalPath(pathPattern, request);
+		URI uri = UriComponentsBuilder.fromPath(localPath).query(request.getURI().getRawQuery()).build(true).toUri();
+		return InstanceWebProxy.ForwardRequest.builder()
+			.uri(uri)
+			.method(request.getMethod())
+			.headers(this.httpHeadersFilter.filterHeaders(request.getHeaders()))
+			.body(BodyInserters.fromDataBuffers(cachedBody))
+			.build();
+	}
+
+	private String getLocalPath(String pathPattern, ServerHttpRequest request) {
 		String pathWithinApplication = request.getPath().pathWithinApplication().value();
-		return this.pathMatcher.extractPathWithinPattern(endpointPathPattern, pathWithinApplication);
+		return this.pathMatcher.extractPathWithinPattern(pathPattern, pathWithinApplication);
 	}
 
 }

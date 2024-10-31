@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,8 +20,8 @@ import java.net.URI;
 import java.util.Collections;
 import java.util.Map;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.ResponseEntity;
@@ -48,7 +48,7 @@ import static org.mockito.Mockito.when;
 public class HipchatNotifierTest {
 
 	private final Instance instance = Instance.create(InstanceId.of("-id-"))
-			.register(Registration.create("App", "http://health").build());
+		.register(Registration.create("App", "http://health").build());
 
 	private HipchatNotifier notifier;
 
@@ -56,7 +56,7 @@ public class HipchatNotifierTest {
 
 	private InstanceRepository repository;
 
-	@Before
+	@BeforeEach
 	public void setUp() {
 		repository = mock(InstanceRepository.class);
 		when(repository.find(instance.getId())).thenReturn(Mono.just(instance));
@@ -73,19 +73,19 @@ public class HipchatNotifierTest {
 	public void test_onApplicationEvent_resolve() {
 		@SuppressWarnings("unchecked")
 		ArgumentCaptor<HttpEntity<Map<String, Object>>> httpRequest = ArgumentCaptor
-				.forClass((Class<HttpEntity<Map<String, Object>>>) (Class<?>) HttpEntity.class);
+			.forClass((Class<HttpEntity<Map<String, Object>>>) (Class<?>) HttpEntity.class);
 
 		when(restTemplate.postForEntity(isA(String.class), httpRequest.capture(), eq(Void.class)))
-				.thenReturn(ResponseEntity.ok().build());
+			.thenReturn(ResponseEntity.ok().build());
 
 		StepVerifier
-				.create(notifier.notify(
-						new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofDown())))
-				.verifyComplete();
+			.create(notifier
+				.notify(new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofDown())))
+			.verifyComplete();
 		StepVerifier
-				.create(notifier.notify(
-						new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofUp())))
-				.verifyComplete();
+			.create(notifier
+				.notify(new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofUp())))
+			.verifyComplete();
 
 		assertThat(httpRequest.getValue().getHeaders()).containsEntry("Content-Type",
 				Collections.singletonList("application/json"));
@@ -104,19 +104,18 @@ public class HipchatNotifierTest {
 
 		@SuppressWarnings("unchecked")
 		ArgumentCaptor<HttpEntity<Map<String, Object>>> httpRequest = ArgumentCaptor
-				.forClass((Class<HttpEntity<Map<String, Object>>>) (Class<?>) HttpEntity.class);
+			.forClass((Class<HttpEntity<Map<String, Object>>>) (Class<?>) HttpEntity.class);
 
 		when(restTemplate.postForEntity(isA(String.class), httpRequest.capture(), eq(Void.class)))
-				.thenReturn(ResponseEntity.ok().build());
+			.thenReturn(ResponseEntity.ok().build());
 
 		StepVerifier
-				.create(notifier.notify(
-						new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofUp())))
-				.verifyComplete();
+			.create(notifier
+				.notify(new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), StatusInfo.ofUp())))
+			.verifyComplete();
 		StepVerifier
-				.create(notifier
-						.notify(new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), infoDown)))
-				.verifyComplete();
+			.create(notifier.notify(new InstanceStatusChangedEvent(instance.getId(), instance.getVersion(), infoDown)))
+			.verifyComplete();
 
 		assertThat(httpRequest.getValue().getHeaders()).containsEntry("Content-Type",
 				Collections.singletonList("application/json"));

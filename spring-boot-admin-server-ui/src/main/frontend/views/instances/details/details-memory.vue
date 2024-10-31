@@ -15,129 +15,168 @@
   -->
 
 <template>
-  <sba-panel :title="$t('instances.details.memory.title') + `: ${name}`" v-if="hasLoaded">
+  <sba-panel
+    v-if="hasLoaded"
+    :title="$t('instances.details.memory.title') + `: ${name}`"
+  >
     <div>
-      <div v-if="error" class="message is-danger">
-        <div class="message-body">
-          <strong>
-            <font-awesome-icon class="has-text-danger" icon="exclamation-triangle" />
-            <span v-text="$t('instances.details.memory.fetch_failed')" />
-          </strong>
-          <p v-text="error.message" />
+      <sba-alert v-if="error" :error="error" :title="$t('term.fetch_failed')" />
+
+      <div v-if="current" class="flex w-full">
+        <div v-if="current.metaspace" class="flex-1 text-center">
+          <p
+            id="metrics.metaspace"
+            class="font-bold"
+            v-text="$t('instances.details.memory.metaspace')"
+          />
+          <p
+            aria-labelledby="metrics.metaspace"
+            v-text="prettyBytes(current.metaspace)"
+          />
+        </div>
+        <div class="flex-1 text-center">
+          <p
+            id="metrics.memory.used"
+            class="font-bold"
+            v-text="$t('instances.details.memory.used')"
+          />
+          <p
+            aria-labelledby="metrics.memory.used"
+            v-text="prettyBytes(current.used)"
+          />
+        </div>
+        <div class="flex-1 text-center">
+          <p
+            id="metrics.memory.size"
+            class="font-bold"
+            v-text="$t('instances.details.memory.size')"
+          />
+          <p
+            aria-labelledby="metrics.memory.size"
+            v-text="prettyBytes(current.committed)"
+          />
+        </div>
+        <div v-if="current.max >= 0" class="flex-1 text-center">
+          <p
+            id="metrics.memory.max"
+            class="font-bold"
+            v-text="$t('instances.details.memory.max')"
+          />
+          <p
+            aria-labelledby="metrics.memory.max"
+            v-text="prettyBytes(current.max)"
+          />
         </div>
       </div>
-      <div class="level memory-current" v-if="current">
-        <div class="level-item has-text-centered" v-if="current.metaspace">
-          <div>
-            <p class="heading has-bullet has-bullet-primary" v-text="$t('instances.details.memory.metaspace')" />
-            <p v-text="prettyBytes(current.metaspace)" />
-          </div>
-        </div>
-        <div class="level-item has-text-centered">
-          <div>
-            <p class="heading has-bullet has-bullet-info" v-text="$t('instances.details.memory.used')" />
-            <p v-text="prettyBytes(current.used)" />
-          </div>
-        </div>
-        <div class="level-item has-text-centered">
-          <div>
-            <p class="heading has-bullet has-bullet-warning" v-text="$t('instances.details.memory.size')" />
-            <p v-text="prettyBytes(current.committed)" />
-          </div>
-        </div>
-        <div class="level-item has-text-centered" v-if="current.max >= 0">
-          <div>
-            <p class="heading" v-text="$t('instances.details.memory.max')" />
-            <p v-text="prettyBytes(current.max)" />
-          </div>
-        </div>
-      </div>
-      <mem-chart v-if="chartData.length > 0" :data="chartData" />
+
+      <MemChart v-if="chartData.length > 0" :data="chartData" />
     </div>
   </sba-panel>
 </template>
 
-<script>
-  import subscribing from '@/mixins/subscribing';
-  import Instance from '@/services/instance';
-  import {concatMap, timer} from '@/utils/rxjs';
-  import moment from 'moment';
-  import prettyBytes from 'pretty-bytes';
-  import memChart from './mem-chart';
+<script lang="ts">
+import moment from 'moment';
+import prettyBytes from 'pretty-bytes';
+import { concatMap, delay, retryWhen, timer } from 'rxjs';
+import { take } from 'rxjs/operators';
+import { defineComponent } from 'vue';
 
-  export default {
-    props: {
-      instance: {
-        type: Instance,
-        required: true
-      },
-      type: {
-        type: String,
-        required: true
+import subscribing from '@/mixins/subscribing';
+import sbaConfig from '@/sba-config';
+import Instance from '@/services/instance';
+import MemChart from '@/views/instances/details/mem-chart.vue';
+
+export default defineComponent({
+  name: 'DetailsMemory',
+  components: { MemChart },
+  mixins: [subscribing],
+  props: {
+    instance: {
+      type: Instance,
+      required: true,
+    },
+    type: {
+      type: String,
+      required: true,
+    },
+  },
+  data: () => ({
+    hasLoaded: false,
+    error: null,
+    current: null,
+    chartData: [],
+  }),
+  computed: {
+    name() {
+      switch (this.type) {
+        case 'heap':
+          return 'Heap';
+        case 'nonheap':
+          return 'Non heap';
+        default:
+          return this.type;
       }
     },
-    mixins: [subscribing],
-    components: {memChart},
-    data: () => ({
-      hasLoaded: false,
-      error: null,
-      current: null,
-      chartData: []
-    }),
-    computed: {
-      name() {
-        switch (this.type) {
-          case 'heap':
-            return 'Heap';
-          case 'nonheap':
-            return 'Non heap';
-          default:
-            return this.type;
-        }
-      }
-    },
-    methods: {
-      prettyBytes,
-      async fetchMetrics() {
-        const responseMax = this.instance.fetchMetric('jvm.memory.max', {area: this.type});
-        const responseUsed = this.instance.fetchMetric('jvm.memory.used', {area: this.type});
-        const hasMetaspace = (await responseUsed).data.availableTags.some(tag => tag.tag === 'id' && tag.values.includes('Metaspace'));
-        const responeMetaspace = this.type === 'nonheap' && hasMetaspace
-          ? this.instance.fetchMetric('jvm.memory.used', {area: this.type, id: 'Metaspace'})
+  },
+  methods: {
+    prettyBytes,
+    async fetchMetrics() {
+      const responseMax = this.instance.fetchMetric('jvm.memory.max', {
+        area: this.type,
+      });
+      const responseUsed = this.instance.fetchMetric('jvm.memory.used', {
+        area: this.type,
+      });
+      const hasMetaspace = (await responseUsed).data.availableTags.some(
+        (tag) => tag.tag === 'id' && tag.values.includes('Metaspace'),
+      );
+      const responeMetaspace =
+        this.type === 'nonheap' && hasMetaspace
+          ? this.instance.fetchMetric('jvm.memory.used', {
+              area: this.type,
+              id: 'Metaspace',
+            })
           : null;
-        const responseCommitted = this.instance.fetchMetric('jvm.memory.committed', {area: this.type});
-        return {
-          max: (await responseMax).data.measurements[0].value,
-          used: (await responseUsed).data.measurements[0].value,
-          metaspace: responeMetaspace ? (await responeMetaspace).data.measurements[0].value : null,
-          committed: (await responseCommitted).data.measurements[0].value
-        };
-      },
-      createSubscription() {
-        const vm = this;
-        return timer(0, 2500)
-          .pipe(concatMap(this.fetchMetrics))
-          .subscribe({
-            next: data => {
-              vm.hasLoaded = true;
-              vm.current = data;
-              vm.chartData.push({...data, timestamp: moment().valueOf()});
-            },
-            error: error => {
-              vm.hasLoaded = true;
-              console.warn('Fetching memory metrics failed:', error);
-              vm.error = error;
-            }
-          });
-      }
-    }
-  }
+      const responseCommitted = this.instance.fetchMetric(
+        'jvm.memory.committed',
+        { area: this.type },
+      );
+      return {
+        max: (await responseMax).data.measurements[0].value,
+        used: (await responseUsed).data.measurements[0].value,
+        metaspace: responeMetaspace
+          ? (await responeMetaspace).data.measurements[0].value
+          : null,
+        committed: (await responseCommitted).data.measurements[0].value,
+      };
+    },
+    createSubscription() {
+      return timer(0, sbaConfig.uiSettings.pollTimer.memory)
+        .pipe(
+          concatMap(this.fetchMetrics),
+          retryWhen((err) => {
+            return err.pipe(delay(1000), take(5));
+          }),
+        )
+        .subscribe({
+          next: (data) => {
+            this.hasLoaded = true;
+            this.current = data;
+            this.chartData.push({ ...data, timestamp: moment().valueOf() });
+          },
+          error: (error) => {
+            this.hasLoaded = true;
+            console.warn('Fetching memory metrics failed:', error);
+            this.error = error;
+          },
+        });
+    },
+  },
+});
 </script>
 
-<style lang="scss">
-  @import "~@/assets/css/utilities";
-
-  .memory-current {
-    margin-bottom: 0 !important;
-  }
+<style lang="css">
+.memory-current {
+  margin-bottom: 0 !important;
+}
 </style>

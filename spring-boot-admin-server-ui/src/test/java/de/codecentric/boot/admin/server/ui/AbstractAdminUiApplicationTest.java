@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,7 @@
 
 package de.codecentric.boot.admin.server.ui;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -92,6 +92,61 @@ public abstract class AbstractAdminUiApplicationTest {
 					.accept(MediaType.TEXT_HTML)
 					.exchange()
 					.expectStatus().isNotFound();
+		//@formatter:on
+	}
+
+	@Test
+	public void should_return_correct_content_type_for_js_extensions() {
+		//@formatter:off
+		this.webClient.get()
+					.uri("/extensions/custom/custom.abcdef.js")
+					.header("Accept", "*/*")
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentType(getExpectedMediaTypeForJavaScript());
+		//@formatter:on
+	}
+
+	abstract MediaType getExpectedMediaTypeForJavaScript();
+
+	@Test
+	public void should_return_correct_content_type_for_css_extensions() {
+		//@formatter:off
+		this.webClient.get()
+					.uri("/extensions/custom/custom.abcdef.css")
+					.header("Accept", "text/css,*/*;q=0.1")
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentType(MediaType.parseMediaType("text/css"));
+		//@formatter:on
+	}
+
+	@Test
+	public void should_contain_only_one_language() {
+		//@formatter:off
+		this.webClient.get()
+					.uri("/sba-settings.js")
+					.accept(MediaType.ALL)
+					.exchange()
+					.expectStatus().isOk()
+					.expectHeader().contentTypeCompatibleWith("application/javascript")
+					.expectBody(String.class)
+					.value((body) -> assertThat(body).contains("\"availableLanguages\":[\"de\"]"));
+		//@formatter:on
+	}
+
+	@Test
+	public void should_return_defaults_for_pollTimers() {
+		//@formatter:off
+		this.webClient.get()
+			.uri("/sba-settings.js")
+			.accept(MediaType.ALL)
+			.exchange()
+			.expectStatus().isOk()
+			.expectHeader().contentTypeCompatibleWith("application/javascript")
+			.expectBody(String.class)
+			.value((body) -> assertThat(body).contains("\"pollTimer\""))
+			.value((body) -> assertThat(body).contains("\"cache\":2500"));
 		//@formatter:on
 	}
 

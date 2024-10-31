@@ -15,81 +15,84 @@
   -->
 
 <template>
-  <sba-panel :title="$t('instances.details.info.title')">
-    <div>
-      <div v-if="error" class="message is-warning">
-        <div class="message-body">
-          <strong>
-            <font-awesome-icon class="has-text-warning" icon="exclamation-triangle" />
-            <span v-text="$t('instances.details.info.fetch_failed')" />
-          </strong>
-          <p v-text="error.message" />
-        </div>
-      </div>
-      <div class="content info">
-        <table class="table" v-if="!isEmptyInfo">
-          <tr v-for="(value, key) in info" :key="key">
-            <td class="info__key" v-text="key" />
-            <td>
-              <sba-formatted-obj :value="value" />
-            </td>
-          </tr>
-        </table>
-        <p v-else class="is-muted" v-text="$('instances.details.info.no_info_provided')" />
-      </div>
+  <sba-panel :title="$t('instances.details.info.title')" :loading="loading">
+    <sba-alert
+      v-if="error"
+      :error="error"
+      class="border-l-4"
+      :title="$t('term.fetch_failed')"
+    />
+    <div v-else class="content info">
+      <table v-if="!isEmptyInfo" class="table">
+        <tr v-for="(value, key) in info" :key="key">
+          <td class="info__key" v-text="key" />
+          <td>
+            <sba-formatted-obj :value="value" />
+          </td>
+        </tr>
+      </table>
+      <p
+        v-else
+        class="is-muted"
+        v-text="$t('instances.details.info.no_info_provided')"
+      />
     </div>
   </sba-panel>
 </template>
 
 <script>
-  import Instance from '@/services/instance';
+import Instance from '@/services/instance';
 
-  export default {
-    props: {
-      instance: {
-        type: Instance,
-        required: true
-      }
+export default {
+  props: {
+    instance: {
+      type: Instance,
+      required: true,
     },
-    data: () => ({
-      error: null,
-      liveInfo: null
-    }),
-    computed: {
-      info() {
-        return this.liveInfo || this.instance.info
-      },
-      isEmptyInfo() {
-        return Object.keys(this.info).length <= 0;
-      }
+  },
+  data: () => ({
+    error: null,
+    loading: false,
+    liveInfo: null,
+  }),
+  computed: {
+    info() {
+      return this.liveInfo || this.instance.info;
     },
-    created() {
-      this.fetchInfo();
+    isEmptyInfo() {
+      return Object.keys(this.info).length <= 0;
     },
-    methods: {
-      async fetchInfo() {
-        if (this.instance.hasEndpoint('info')) {
-          try {
-            this.error = null;
-            const res = await this.instance.fetchInfo();
-            this.liveInfo = res.data;
-          } catch (error) {
-            this.error = error;
-            console.warn('Fetching info failed:', error);
-          }
+  },
+  created() {
+    this.fetchInfo();
+  },
+  methods: {
+    async fetchInfo() {
+      if (this.instance.hasEndpoint('info')) {
+        this.loading = true;
+        this.error = null;
+
+        try {
+          const res = await this.instance.fetchInfo();
+          this.liveInfo = res.data;
+        } catch (error) {
+          this.error = error;
+          console.warn('Fetching info failed:', error);
+        } finally {
+          this.loading = false;
         }
       }
-    }
-  }
+    },
+  },
+};
 </script>
 
-<style lang="scss">
-  .info {
-    overflow: auto;
+<style lang="css">
+.info {
+  overflow: auto;
+}
 
-    &__key {
-      vertical-align: top;
-    }
-  }
-
+.info__key {
+  vertical-align: top;
+}
 </style>

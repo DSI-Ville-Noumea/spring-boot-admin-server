@@ -15,93 +15,93 @@
   -->
 
 <template>
-  <sba-panel :title="$t('instances.details.gc.title')" v-if="hasLoaded">
-    <div>
-      <div v-if="error" class="message is-danger">
-        <div class="message-body">
-          <strong>
-            <font-awesome-icon class="has-text-danger" icon="exclamation-triangle" />
-            <span v-text="$t('instances.details.gc.Fetching GC metrics failed.')" />
-          </strong>
-          <p v-text="error.message" />
-        </div>
+  <sba-panel v-if="hasLoaded" :title="$t('instances.details.gc.title')">
+    <sba-alert v-if="error" :error="error" :title="$t('term.fetch_failed')" />
+
+    <div v-if="current" class="flex w-full">
+      <div class="flex-1 text-center">
+        <p class="font-bold" v-text="$t('instances.details.gc.count')" />
+        <p v-text="current.count" />
       </div>
-      <div class="level" v-if="current">
-        <div class="level-item has-text-centered">
-          <div>
-            <p class="heading" v-text="$t('instances.details.gc.count')" />
-            <p v-text="current.count" />
-          </div>
-        </div>
-        <div class="level-item has-text-centered">
-          <div>
-            <p class="heading" v-text="$t('instances.details.gc.time_spent_total')" />
-            <p v-text="`${current.total_time.asSeconds().toFixed(4)}s`" />
-          </div>
-        </div>
-        <div class="level-item has-text-centered">
-          <div>
-            <p class="heading" v-text="$t('instances.details.gc.time_spent_max')" />
-            <p v-text="`${current.max.asSeconds().toFixed(4)}s`" />
-          </div>
-        </div>
+      <div class="flex-1 text-center">
+        <p
+          class="font-bold"
+          v-text="$t('instances.details.gc.time_spent_total')"
+        />
+        <p v-text="`${current.total_time.asSeconds().toFixed(4)}s`" />
+      </div>
+      <div class="flex-1 text-center">
+        <p
+          class="font-bold"
+          v-text="$t('instances.details.gc.time_spent_max')"
+        />
+        <p v-text="`${current.max.asSeconds().toFixed(4)}s`" />
       </div>
     </div>
   </sba-panel>
 </template>
 
 <script>
-  import subscribing from '@/mixins/subscribing';
-  import Instance from '@/services/instance';
-  import {concatMap, timer} from '@/utils/rxjs';
-  import moment from 'moment';
-  import {toMillis} from '../metrics/metric';
+import moment from 'moment';
+import { take } from 'rxjs/operators';
 
-  export default {
-    props: {
-      instance: {
-        type: Instance,
-        required: true
-      }
+import subscribing from '@/mixins/subscribing';
+import sbaConfig from '@/sba-config';
+import Instance from '@/services/instance';
+import { concatMap, delay, retryWhen, timer } from '@/utils/rxjs';
+import { toMillis } from '@/views/instances/metrics/metric';
+
+export default {
+  mixins: [subscribing],
+  props: {
+    instance: {
+      type: Instance,
+      required: true,
     },
-    mixins: [subscribing],
-    data: () => ({
-      hasLoaded: false,
-      error: null,
-      current: null,
-    }),
-    methods: {
-      async fetchMetrics() {
-        const response = await this.instance.fetchMetric('jvm.gc.pause');
-        const measurements = response.data.measurements.reduce(
-          (current, measurement) => ({
-            ...current,
-            [measurement.statistic.toLowerCase()]: measurement.value
+  },
+  data: () => ({
+    hasLoaded: false,
+    error: null,
+    current: null,
+  }),
+  methods: {
+    async fetchMetrics() {
+      const response = await this.instance.fetchMetric('jvm.gc.pause');
+      const measurements = response.data.measurements.reduce(
+        (current, measurement) => ({
+          ...current,
+          [measurement.statistic.toLowerCase()]: measurement.value,
+        }),
+        {},
+      );
+      return {
+        ...measurements,
+        total_time: moment.duration(
+          toMillis(measurements.total_time, response.baseUnit),
+        ),
+        max: moment.duration(toMillis(measurements.max, response.baseUnit)),
+      };
+    },
+    createSubscription() {
+      return timer(0, sbaConfig.uiSettings.pollTimer.gc)
+        .pipe(
+          concatMap(this.fetchMetrics),
+          retryWhen((err) => {
+            return err.pipe(delay(1000), take(5));
           }),
-          {}
-        );
-        return {
-          ...measurements,
-          total_time: moment.duration(toMillis(measurements.total_time, response.baseUnit)),
-          max: moment.duration(toMillis(measurements.max, response.baseUnit)),
-        };
-      },
-      createSubscription() {
-        const vm = this;
-        return timer(0, 2500)
-          .pipe(concatMap(this.fetchMetrics))
-          .subscribe({
-            next: data => {
-              vm.hasLoaded = true;
-              vm.current = data;
-            },
-            error: error => {
-              vm.hasLoaded = true;
-              console.warn('Fetching GC metrics failed:', error);
-              vm.error = error;
-            }
-          });
-      }
-    }
-  }
+        )
+        .subscribe({
+          next: (data) => {
+            this.hasLoaded = true;
+            this.current = data;
+          },
+          error: (error) => {
+            this.hasLoaded = true;
+            console.warn('Fetching GC metrics failed:', error);
+            this.error = error;
+          },
+        });
+    },
+  },
+};
 </script>

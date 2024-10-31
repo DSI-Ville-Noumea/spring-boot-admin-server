@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,8 +16,9 @@
 
 package de.codecentric.boot.admin.client.registration;
 
-import org.junit.Before;
-import org.junit.Test;
+import org.assertj.core.api.SoftAssertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.EndpointId;
@@ -29,7 +30,6 @@ import de.codecentric.boot.admin.client.config.InstanceProperties;
 
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,7 +51,7 @@ public class CloudFoundryApplicationFactoryTest {
 			this.management, this.server, this.pathMappedEndpoints, this.webEndpoint,
 			() -> singletonMap("contributor", "test"), this.cfApplicationProperties);
 
-	@Before
+	@BeforeEach
 	public void setup() {
 		this.instanceProperties.setName("test");
 	}
@@ -63,9 +63,11 @@ public class CloudFoundryApplicationFactoryTest {
 
 		Application app = this.factory.createApplication();
 
-		assertThat(app.getManagementUrl()).isEqualTo("http://application/Uppercase/actuator");
-		assertThat(app.getHealthUrl()).isEqualTo("http://application/Uppercase/actuator/health");
-		assertThat(app.getServiceUrl()).isEqualTo("http://application/Uppercase/");
+		SoftAssertions softly = new SoftAssertions();
+		softly.assertThat(app.getManagementUrl()).isEqualTo("http://application/Uppercase/actuator");
+		softly.assertThat(app.getHealthUrl()).isEqualTo("http://application/Uppercase/actuator/health");
+		softly.assertThat(app.getServiceUrl()).isEqualTo("http://application/Uppercase/");
+		softly.assertAll();
 	}
 
 	@Test
@@ -76,9 +78,11 @@ public class CloudFoundryApplicationFactoryTest {
 
 		Application app = this.factory.createApplication();
 
-		assertThat(app.getManagementUrl()).isEqualTo("https://serviceBaseUrl/actuator");
-		assertThat(app.getHealthUrl()).isEqualTo("https://serviceBaseUrl/actuator/health");
-		assertThat(app.getServiceUrl()).isEqualTo("https://serviceBaseUrl/");
+		SoftAssertions softly = new SoftAssertions();
+		softly.assertThat(app.getManagementUrl()).isEqualTo("https://serviceBaseUrl/actuator");
+		softly.assertThat(app.getHealthUrl()).isEqualTo("https://serviceBaseUrl/actuator/health");
+		softly.assertThat(app.getServiceUrl()).isEqualTo("https://serviceBaseUrl/");
+		softly.assertAll();
 	}
 
 }

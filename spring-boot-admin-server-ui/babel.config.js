@@ -15,7 +15,10 @@
  */
 
 module.exports = {
-  presets: [
-    '@vue/cli-plugin-babel/preset'
-  ]
+  presets: [['@babel/preset-env', { modules: 'commonjs' }]],
+  env: {
+    test: {
+      plugins: ['@babel/plugin-transform-runtime', '@babel/preset-typescript'],
+    },
+  },
 };

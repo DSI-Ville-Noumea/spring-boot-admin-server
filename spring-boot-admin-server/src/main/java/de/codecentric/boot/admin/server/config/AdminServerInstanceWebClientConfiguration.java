@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,17 +16,21 @@
 
 package de.codecentric.boot.admin.server.config;
 
+import java.net.CookiePolicy;
 import java.util.List;
 
+import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Scope;
 import org.springframework.core.annotation.Order;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import de.codecentric.boot.admin.server.domain.events.InstanceEvent;
 import de.codecentric.boot.admin.server.web.client.BasicAuthHttpHeaderProvider;
 import de.codecentric.boot.admin.server.web.client.CompositeHttpHeadersProvider;
 import de.codecentric.boot.admin.server.web.client.HttpHeadersProvider;
@@ -36,8 +40,14 @@ import de.codecentric.boot.admin.server.web.client.InstanceWebClient;
 import de.codecentric.boot.admin.server.web.client.InstanceWebClientCustomizer;
 import de.codecentric.boot.admin.server.web.client.LegacyEndpointConverter;
 import de.codecentric.boot.admin.server.web.client.LegacyEndpointConverters;
+import de.codecentric.boot.admin.server.web.client.cookies.CookieStoreCleanupTrigger;
+import de.codecentric.boot.admin.server.web.client.cookies.JdkPerInstanceCookieStore;
+import de.codecentric.boot.admin.server.web.client.cookies.PerInstanceCookieStore;
+import de.codecentric.boot.admin.server.web.client.reactive.CompositeReactiveHttpHeadersProvider;
+import de.codecentric.boot.admin.server.web.client.reactive.ReactiveHttpHeadersProvider;
 
 @Configuration(proxyBeanMethods = false)
+@Lazy(false)
 public class AdminServerInstanceWebClientConfiguration {
 
 	private final InstanceWebClient.Builder instanceWebClientBuilder;
@@ -79,6 +89,16 @@ public class AdminServerInstanceWebClientConfiguration {
 			}
 
 			@Bean
+			@Order(0)
+			@ConditionalOnBean(ReactiveHttpHeadersProvider.class)
+			@ConditionalOnMissingBean(name = "addReactiveHeadersInstanceExchangeFilter")
+			public InstanceExchangeFilterFunction addReactiveHeadersInstanceExchangeFilter(
+					List<ReactiveHttpHeadersProvider> reactiveHeadersProviders) {
+				return InstanceExchangeFilterFunctions
+					.addHeadersReactive(new CompositeReactiveHttpHeadersProvider(reactiveHeadersProviders));
+			}
+
+			@Bean
 			@Order(10)
 			@ConditionalOnMissingBean(name = "rewriteEndpointUrlInstanceExchangeFilter")
 			public InstanceExchangeFilterFunction rewriteEndpointUrlInstanceExchangeFilter() {
@@ -109,6 +129,14 @@ public class AdminServerInstanceWebClientConfiguration {
 			}
 
 			@Bean
+			@Order(50)
+			@ConditionalOnMissingBean(name = "cookieHandlingInstanceExchangeFilter")
+			public InstanceExchangeFilterFunction cookieHandlingInstanceExchangeFilter(
+					final PerInstanceCookieStore store) {
+				return InstanceExchangeFilterFunctions.handleCookies(store);
+			}
+
+			@Bean
 			@Order(100)
 			@ConditionalOnMissingBean(name = "retryInstanceExchangeFilter")
 			public InstanceExchangeFilterFunction retryInstanceExchangeFilter(
@@ -135,8 +163,16 @@ public class AdminServerInstanceWebClientConfiguration {
 
 		@Bean
 		@ConditionalOnMissingBean
-		public BasicAuthHttpHeaderProvider basicAuthHttpHeadersProvider() {
-			return new BasicAuthHttpHeaderProvider();
+		public BasicAuthHttpHeaderProvider basicAuthHttpHeadersProvider(AdminServerProperties adminServerProperties) {
+			AdminServerProperties.InstanceAuthProperties instanceAuth = adminServerProperties.getInstanceAuth();
+
+			if (instanceAuth.isEnabled()) {
+				return new BasicAuthHttpHeaderProvider(instanceAuth.getDefaultUserName(),
+						instanceAuth.getDefaultPassword(), instanceAuth.getServiceMap());
+			}
+			else {
+				return new BasicAuthHttpHeaderProvider();
+			}
 		}
 
 	}
@@ -184,6 +220,60 @@ public class AdminServerInstanceWebClientConfiguration {
 		@ConditionalOnMissingBean(name = "flywayLegacyEndpointConverter")
 		public LegacyEndpointConverter flywayLegacyEndpointConverter() {
 			return LegacyEndpointConverters.flyway();
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(name = "beansLegacyEndpointConverter")
+		public LegacyEndpointConverter beansLegacyEndpointConverter() {
+			return LegacyEndpointConverters.beans();
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(name = "configpropsLegacyEndpointConverter")
+		public LegacyEndpointConverter configpropsLegacyEndpointConverter() {
+			return LegacyEndpointConverters.configprops();
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(name = "mappingsLegacyEndpointConverter")
+		public LegacyEndpointConverter mappingsLegacyEndpointConverter() {
+			return LegacyEndpointConverters.mappings();
+		}
+
+		@Bean
+		@ConditionalOnMissingBean(name = "startupLegacyEndpointConverter")
+		public LegacyEndpointConverter startupLegacyEndpointConverter() {
+			return LegacyEndpointConverters.startup();
+		}
+
+	}
+
+	@Configuration(proxyBeanMethods = false)
+	protected static class CookieStoreConfiguration {
+
+		/**
+		 * Creates a default {@link PerInstanceCookieStore} that should be used.
+		 * @return the cookie store
+		 */
+		@Bean
+		@ConditionalOnMissingBean
+		public PerInstanceCookieStore cookieStore() {
+			return new JdkPerInstanceCookieStore(CookiePolicy.ACCEPT_ORIGINAL_SERVER);
+		}
+
+		/**
+		 * Creates a default trigger to cleanup the cookie store on deregistering of an
+		 * {@link de.codecentric.boot.admin.server.domain.entities.Instance}.
+		 * @param publisher publisher of {@link InstanceEvent}s events
+		 * @param cookieStore the store to inform about deregistration of an
+		 * {@link de.codecentric.boot.admin.server.domain.entities.Instance}
+		 * @return a new trigger
+		 */
+		@Bean(initMethod = "start", destroyMethod = "stop")
+		@ConditionalOnMissingBean
+		public CookieStoreCleanupTrigger cookieStoreCleanupTrigger(final Publisher<InstanceEvent> publisher,
+				final PerInstanceCookieStore cookieStore) {
+			return new CookieStoreCleanupTrigger(publisher, cookieStore);
 		}
 
 	}

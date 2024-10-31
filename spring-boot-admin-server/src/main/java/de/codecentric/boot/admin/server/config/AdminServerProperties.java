@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.convert.DurationUnit;
 
 import de.codecentric.boot.admin.server.web.PathUtils;
+import de.codecentric.boot.admin.server.web.client.BasicAuthHttpHeaderProvider.InstanceCredentials;
 
 import static java.util.Arrays.asList;
 
@@ -40,14 +41,18 @@ public class AdminServerProperties {
 	 */
 	private String contextPath = "";
 
+	private ServerProperties server = new ServerProperties();
+
 	private MonitorProperties monitor = new MonitorProperties();
+
+	private InstanceAuthProperties instanceAuth = new InstanceAuthProperties();
 
 	private InstanceProxyProperties instanceProxy = new InstanceProxyProperties();
 
 	/**
 	 * The metadata keys which should be sanitized when serializing to json
 	 */
-	private String[] metadataKeysToSanitize = new String[] { ".*password$", ".*secret$", ".*key$", ".*$token$",
+	private String[] metadataKeysToSanitize = new String[] { ".*password$", ".*secret$", ".*key$", ".*token$",
 			".*credentials.*", ".*vcap_services$" };
 
 	/**
@@ -73,6 +78,16 @@ public class AdminServerProperties {
 	}
 
 	@lombok.Data
+	public static class ServerProperties {
+
+		/**
+		 * Enable Spring Boot Admin Server Default: true
+		 */
+		private boolean enabled = true;
+
+	}
+
+	@lombok.Data
 	public static class MonitorProperties {
 
 		/**
@@ -89,10 +104,24 @@ public class AdminServerProperties {
 		private Duration statusLifetime = Duration.ofMillis(10_000L);
 
 		/**
+		 * The maximal backoff for status check retries (retry after error has exponential
+		 * backoff, minimum backoff is 1 second).
+		 */
+		@DurationUnit(ChronoUnit.MILLIS)
+		private Duration statusMaxBackoff = Duration.ofMillis(60_000L);
+
+		/**
 		 * Time interval to check the info of instances,
 		 */
 		@DurationUnit(ChronoUnit.MILLIS)
 		private Duration infoInterval = Duration.ofMinutes(1L);
+
+		/**
+		 * The maximal backoff for info check retries (retry after error has exponential
+		 * backoff, minimum backoff is 1 second).
+		 */
+		@DurationUnit(ChronoUnit.MILLIS)
+		private Duration infoMaxBackoff = Duration.ofMinutes(10);
 
 		/**
 		 * Lifetime of info. The info won't be updated as long the last info isn't
@@ -124,6 +153,39 @@ public class AdminServerProperties {
 		 */
 		@DurationUnit(ChronoUnit.MILLIS)
 		private Map<String, Duration> timeout = new HashMap<>();
+
+	}
+
+	@lombok.Data
+	public static class InstanceAuthProperties {
+
+		/**
+		 * Whether or not to use configuration properties as a source for instance
+		 * credentials <br/>
+		 * Default: true
+		 */
+		private boolean enabled = true;
+
+		/**
+		 * Default username used for authentication to each instance. Individual values
+		 * for specific instances can be overriden using
+		 * `spring.boot.admin.instance-auth.service-map.*.user-name`. <br/>
+		 * Default: null
+		 */
+		private String defaultUserName = null;
+
+		/**
+		 * Default userpassword used for authentication to each instance. Individual
+		 * values for specific instances can be overriden using
+		 * `spring.boot.admin.instance-auth.service-map.*.user-password`. <br/>
+		 * Default: null
+		 */
+		private String defaultPassword = null;
+
+		/**
+		 * Map of instance credentials per registered service name
+		 */
+		private Map<String, InstanceCredentials> serviceMap = new HashMap<>();
 
 	}
 

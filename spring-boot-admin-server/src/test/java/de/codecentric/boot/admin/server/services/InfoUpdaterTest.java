@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,13 +18,13 @@ package de.codecentric.boot.admin.server.services;
 
 import java.time.Duration;
 
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.Options;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
 
 import de.codecentric.boot.admin.server.domain.entities.EventsourcingInstanceRepository;
@@ -54,8 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class InfoUpdaterTest {
 
-	@Rule
-	public WireMockRule wireMock = new WireMockRule(Options.DYNAMIC_PORT);
+	public WireMockServer wireMock = new WireMockServer(Options.DYNAMIC_PORT);
 
 	private InfoUpdater updater;
 
@@ -63,137 +62,169 @@ public class InfoUpdaterTest {
 
 	private InstanceRepository repository;
 
-	@Before
+	private final ApiMediaTypeHandler apiMediaTypeHandler = new ApiMediaTypeHandler();
+
+	@BeforeEach
 	public void setup() {
 		this.eventStore = new InMemoryEventStore();
 		this.repository = new EventsourcingInstanceRepository(this.eventStore);
 		this.updater = new InfoUpdater(this.repository,
-				InstanceWebClient.builder().filter(rewriteEndpointUrl())
-						.filter(retry(0, singletonMap(Endpoint.INFO, 1)))
-						.filter(timeout(Duration.ofSeconds(2), emptyMap())).build());
+				InstanceWebClient.builder()
+					.filter(rewriteEndpointUrl())
+					.filter(retry(0, singletonMap(Endpoint.INFO, 1)))
+					.filter(timeout(Duration.ofSeconds(2), emptyMap()))
+					.build(),
+				this.apiMediaTypeHandler);
+		this.wireMock.start();
 	}
 
-	@BeforeClass
+	@AfterEach
+	public void teardown() {
+		this.wireMock.stop();
+	}
+
+	@BeforeAll
 	public static void setUp() {
 		StepVerifier.setDefaultTimeout(Duration.ofSeconds(5));
 	}
 
-	@AfterClass
+	@AfterAll
 	public static void tearDown() {
 		StepVerifier.resetDefaultTimeout();
 	}
 
 	@Test
-	public void should_update_info_for_online_with_info_endpoint_only() {
+	void should_update_info_for_online_with_info_endpoint_only() {
 		// given
 		Registration registration = Registration.create("foo", this.wireMock.url("/health")).build();
-		Instance instance = Instance.create(InstanceId.of("onl")).register(registration)
-				.withEndpoints(Endpoints.single("info", this.wireMock.url("/info"))).withStatusInfo(StatusInfo.ofUp());
+		Instance instance = Instance.create(InstanceId.of("onl"))
+			.register(registration)
+			.withEndpoints(Endpoints.single("info", this.wireMock.url("/info")))
+			.withStatusInfo(StatusInfo.ofUp());
 		StepVerifier.create(this.repository.save(instance)).expectNextCount(1).verifyComplete();
 		String body = "{ \"foo\": \"bar\" }";
 		this.wireMock.stubFor(
 				get("/info").willReturn(okJson(body).withHeader("Content-Length", Integer.toString(body.length()))));
 
-		Instance noInfo = Instance.create(InstanceId.of("noinfo")).register(registration)
-				.withEndpoints(Endpoints.single("beans", this.wireMock.url("/beans")))
-				.withStatusInfo(StatusInfo.ofUp());
+		Instance noInfo = Instance.create(InstanceId.of("noinfo"))
+			.register(registration)
+			.withEndpoints(Endpoints.single("beans", this.wireMock.url("/beans")))
+			.withStatusInfo(StatusInfo.ofUp());
 		StepVerifier.create(this.repository.save(noInfo)).expectNextCount(1).verifyComplete();
 
-		Instance offline = Instance.create(InstanceId.of("off")).register(registration)
-				.withStatusInfo(StatusInfo.ofOffline());
+		Instance offline = Instance.create(InstanceId.of("off"))
+			.register(registration)
+			.withStatusInfo(StatusInfo.ofOffline());
 		StepVerifier.create(this.repository.save(offline)).expectNextCount(1).verifyComplete();
 
-		Instance unknown = Instance.create(InstanceId.of("unk")).register(registration)
-				.withStatusInfo(StatusInfo.ofUnknown());
+		Instance unknown = Instance.create(InstanceId.of("unk"))
+			.register(registration)
+			.withStatusInfo(StatusInfo.ofUnknown());
 		StepVerifier.create(this.repository.save(unknown)).expectNextCount(1).verifyComplete();
 
 		// when
-		StepVerifier.create(this.eventStore).expectSubscription()
-				.then(() -> StepVerifier.create(this.updater.updateInfo(offline.getId())).verifyComplete())
-				.then(() -> StepVerifier.create(this.updater.updateInfo(unknown.getId())).verifyComplete())
-				.then(() -> StepVerifier.create(this.updater.updateInfo(noInfo.getId())).verifyComplete())
-				.expectNoEvent(Duration.ofMillis(100L))
-				.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
-				// then
-				.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class)).thenCancel()
-				.verify();
+		StepVerifier.create(this.eventStore)
+			.expectSubscription()
+			.then(() -> StepVerifier.create(this.updater.updateInfo(offline.getId())).verifyComplete())
+			.then(() -> StepVerifier.create(this.updater.updateInfo(unknown.getId())).verifyComplete())
+			.then(() -> StepVerifier.create(this.updater.updateInfo(noInfo.getId())).verifyComplete())
+			.expectNoEvent(Duration.ofMillis(100L))
+			.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
+			// then
+			.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class))
+			.thenCancel()
+			.verify();
 
 		StepVerifier.create(this.repository.find(instance.getId()))
-				.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.from(singletonMap("foo", "bar"))))
-				.verifyComplete();
+			.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.from(singletonMap("foo", "bar"))))
+			.verifyComplete();
 	}
 
 	@Test
-	public void should_clear_info_on_http_error() {
+	void should_clear_info_on_http_error() {
 		// given
 		Instance instance = Instance.create(InstanceId.of("onl"))
-				.register(Registration.create("foo", this.wireMock.url("/health")).build())
-				.withEndpoints(Endpoints.single("info", this.wireMock.url("/info"))).withStatusInfo(StatusInfo.ofUp())
-				.withInfo(Info.from(singletonMap("foo", "bar")));
+			.register(Registration.create("foo", this.wireMock.url("/health")).build())
+			.withEndpoints(Endpoints.single("info", this.wireMock.url("/info")))
+			.withStatusInfo(StatusInfo.ofUp())
+			.withInfo(Info.from(singletonMap("foo", "bar")));
 		StepVerifier.create(this.repository.save(instance)).expectNextCount(1).verifyComplete();
 
 		this.wireMock.stubFor(get("/info").willReturn(serverError()));
 
 		// when
-		StepVerifier.create(this.eventStore).expectSubscription()
-				.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
-				// then
-				.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class)).thenCancel()
-				.verify();
+		StepVerifier.create(this.eventStore)
+			.expectSubscription()
+			.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
+			// then
+			.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class))
+			.thenCancel()
+			.verify();
 
 		StepVerifier.create(this.repository.find(instance.getId()))
-				.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.empty())).verifyComplete();
+			.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.empty()))
+			.verifyComplete();
 	}
 
 	@Test
-	public void should_clear_info_on_exception() {
-		this.updater = new InfoUpdater(this.repository, InstanceWebClient.builder().build());
+	void should_clear_info_on_exception() {
 
 		// given
 		Instance instance = Instance.create(InstanceId.of("onl"))
-				.register(Registration.create("foo", this.wireMock.url("/health")).build())
-				.withEndpoints(Endpoints.single("info", this.wireMock.url("/info"))).withStatusInfo(StatusInfo.ofUp())
-				.withInfo(Info.from(singletonMap("foo", "bar")));
+			.register(Registration.create("foo", this.wireMock.url("/health")).build())
+			.withEndpoints(Endpoints.single("info", this.wireMock.url("/info")))
+			.withStatusInfo(StatusInfo.ofUp())
+			.withInfo(Info.from(singletonMap("foo", "bar")));
 		StepVerifier.create(this.repository.save(instance)).expectNextCount(1).verifyComplete();
 
-		this.wireMock.stubFor(get("/info").willReturn(okJson("{ \"foo\": \"bar\" }").withFixedDelay(1500)));
+		this.wireMock.stubFor(get("/info").willReturn(okJson("{ \"foo\": \"bar\" }").withFixedDelay(2100)));
 
 		// when
-		StepVerifier.create(this.eventStore).expectSubscription()
-				.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
-				// then
-				.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class)).thenCancel()
-				.verify();
+		StepVerifier.create(this.eventStore)
+			.expectSubscription()
+			.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
+			// then
+			.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class))
+			.thenCancel()
+			.verify();
 
 		StepVerifier.create(this.repository.find(instance.getId()))
-				.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.empty())).verifyComplete();
+			.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.empty()))
+			.verifyComplete();
 	}
 
 	@Test
-	public void should_retry() {
+	void should_retry() {
 		// given
 		Registration registration = Registration.create("foo", this.wireMock.url("/health")).build();
-		Instance instance = Instance.create(InstanceId.of("onl")).register(registration)
-				.withEndpoints(Endpoints.single("info", this.wireMock.url("/info"))).withStatusInfo(StatusInfo.ofUp());
+		Instance instance = Instance.create(InstanceId.of("onl"))
+			.register(registration)
+			.withEndpoints(Endpoints.single("info", this.wireMock.url("/info")))
+			.withStatusInfo(StatusInfo.ofUp());
 		StepVerifier.create(this.repository.save(instance)).expectNextCount(1).verifyComplete();
 
-		this.wireMock.stubFor(get("/info").inScenario("retry").whenScenarioStateIs(STARTED)
-				.willReturn(aResponse().withFixedDelay(5000)).willSetStateTo("recovered"));
+		this.wireMock.stubFor(get("/info").inScenario("retry")
+			.whenScenarioStateIs(STARTED)
+			.willReturn(aResponse().withFixedDelay(5000))
+			.willSetStateTo("recovered"));
 
 		String body = "{ \"foo\": \"bar\" }";
-		this.wireMock.stubFor(get("/info").inScenario("retry").whenScenarioStateIs("recovered")
-				.willReturn(okJson(body).withHeader("Content-Length", Integer.toString(body.length()))));
+		this.wireMock.stubFor(get("/info").inScenario("retry")
+			.whenScenarioStateIs("recovered")
+			.willReturn(okJson(body).withHeader("Content-Length", Integer.toString(body.length()))));
 
 		// when
-		StepVerifier.create(this.eventStore).expectSubscription()
-				.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
-				// then
-				.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class)).thenCancel()
-				.verify();
+		StepVerifier.create(this.eventStore)
+			.expectSubscription()
+			.then(() -> StepVerifier.create(this.updater.updateInfo(instance.getId())).verifyComplete())
+			// then
+			.assertNext((event) -> assertThat(event).isInstanceOf(InstanceInfoChangedEvent.class))
+			.thenCancel()
+			.verify();
 
 		StepVerifier.create(this.repository.find(instance.getId()))
-				.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.from(singletonMap("foo", "bar"))))
-				.verifyComplete();
+			.assertNext((app) -> assertThat(app.getInfo()).isEqualTo(Info.from(singletonMap("foo", "bar"))))
+			.verifyComplete();
 	}
 
 }

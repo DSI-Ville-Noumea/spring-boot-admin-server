@@ -15,62 +15,55 @@
   -->
 
 <template>
-  <table class="caches table is-fullwidth">
+  <table class="table-auto w-full">
     <thead>
       <tr>
         <th v-html="$t('instances.caches.name')" />
         <th v-html="$t('instances.caches.cache_manager')" />
-        <th class="is-narrow">
-          <sba-confirm-button
-            class="button"
-            :class="{'is-loading' : clearingAll === 'executing', 'is-info' : clearingAll === 'completed', 'is-danger' : clearingAll === 'failed'}"
-            :disabled="clearingAll !== null"
-            @click="clearCaches"
-          >
-            <span v-if="clearingAll === 'completed'" v-text="$t('term.cleared')" />
-            <span v-else-if="clearingAll === 'failed'" v-text="$t('term.failed')" />
-            <span v-else>
-              <font-awesome-icon icon="trash" />&nbsp;
-              <span v-text="$t('term.clear')" />
-            </span>
-          </sba-confirm-button>
-        </th>
+        <th>&nbsp;</th>
       </tr>
     </thead>
     <tbody>
-      <tr
-        v-for="cache in caches"
-        :key="cache.key"
-      >
+      <tr v-for="cache in caches" :key="cache.key">
         <td>
-          <span
-            class="is-breakable"
-            v-text="cache.name"
-          />
+          <span class="is-breakable" v-text="cache.name" />
         </td>
         <td>
-          <span
-            class="is-breakable"
-            v-text="cache.cacheManager"
-          />
+          <span class="is-breakable" v-text="cache.cacheManager" />
         </td>
-        <td class="is-narrow">
-          <button class="button"
-                  :class="{ 'is-loading' : clearing[cache.name] === 'executing', 'is-info' : clearing[cache.name] === 'completed', 'is-danger' : clearing[cache.name] === 'failed' }"
-                  :disabled="cache.name in clearing" @click="clearCache(cache.name)"
+        <td class="is-narrow text-right">
+          <sba-button
+            class="button"
+            :class="{
+              'is-loading': clearing[cache.key] === 'executing',
+              'is-info': clearing[cache.key] === 'completed',
+              'is-danger': clearing[cache.key] === 'failed',
+            }"
+            :disabled="cache.key in clearing"
+            @click="clearCache(cache)"
           >
-            <span v-if="clearing[cache.name] === 'completed'" v-text="$t('term.cleared')" />
-            <span v-else-if="clearing[cache.name] === 'failed'" v-text="$t('term.failed')" />
+            <span
+              v-if="clearing[cache.key] === 'completed'"
+              v-text="$t('term.cleared')"
+            />
+            <span
+              v-else-if="clearing[cache.key] === 'failed'"
+              v-text="$t('term.failed')"
+            />
             <span v-else>
-              <font-awesome-icon icon="trash" />
+              <font-awesome-icon icon="trash" class="mr-2" />
               <span v-text="$t('term.clear')" />
             </span>
-          </button>
+          </sba-button>
         </td>
       </tr>
       <tr v-if="caches.length === 0">
         <td class="is-muted" colspan="3 ">
-          <p v-if="isLoading" class="is-loading" v-text="$t('instances.caches.loading')" />
+          <p
+            v-if="isLoading"
+            class="is-loading"
+            v-text="$t('instances.caches.loading')"
+          />
           <p v-else v-text="$t('instances.caches.no_caches_found')" />
         </td>
       </tr>
@@ -78,75 +71,80 @@
   </table>
 </template>
 <script>
-  import Instance from '@/services/instance';
-  import {concatMap, from, listen, of, tap} from '@/utils/rxjs';
+import { ActionScope } from '@/components/ActionScope';
 
+import Application from '@/services/application';
+import Instance from '@/services/instance';
+import { concatMap, listen, of, tap } from '@/utils/rxjs';
 
-  export default {
-    name: 'CachesList',
-    props: {
-      caches: {
-        type: Array,
-        default: () => []
-      },
-      instance: {
-        type: Instance,
-        required: true
-      },
-      isLoading: {
-        type: Boolean,
-        default: false
-      }
+export default {
+  name: 'CachesList',
+  props: {
+    caches: {
+      type: Array,
+      default: () => [],
     },
-    data: () => ({
-      clearing: {},
-      clearingAll: null,
-    }),
-    methods: {
-      clearCaches() {
-        const vm = this;
-        from(vm.instance.clearCaches())
-          .pipe(listen(status => vm.clearingAll = status))
-          .subscribe({
-            complete: () => {
-              setTimeout(() => vm.clearingAll = null, 2500);
-              return vm.$emit('cleared', '*');
-            }
-          });
-      },
-      clearCache(cache) {
-        const vm = this;
-        vm._clearCache(cache)
-          .pipe(listen(status => vm.$set(vm.clearing, cache, status)))
-          .subscribe({
-            complete: () => {
-              setTimeout(() => vm.$delete(vm.clearing, cache), 2500);
-              return vm.$emit('cleared', cache);
-            },
-          });
-      },
-      _clearCache(cache) {
-        const vm = this;
-        return of(cache)
-          .pipe(
-            concatMap(async cache => {
-              await vm.instance.clearCache(cache);
-              return cache;
-            }),
-            tap({
-              error: error => {
-                console.warn(`Clearing cache ${cache} failed:`, error);
-              }
-            })
-          );
-      }
-    }
-  }
+    instance: {
+      type: Instance,
+      required: true,
+    },
+    application: {
+      type: Application,
+      required: true,
+    },
+    isLoading: {
+      type: Boolean,
+      default: false,
+    },
+    scope: {
+      type: ActionScope,
+      required: true,
+    },
+  },
+  emits: ['cleared'],
+  data: () => ({
+    clearing: {},
+    clearingAll: null,
+  }),
+  methods: {
+    clearCache(cache) {
+      this._clearCache(cache)
+        .pipe(
+          listen((status) => {
+            this.clearing = {
+              ...this.clearing,
+              [cache.key]: status,
+            };
+          }),
+        )
+        .subscribe({
+          complete: () => {
+            setTimeout(() => {
+              delete this.clearing[cache.key];
+              this.clearing = { ...this.clearing };
+            }, 2500);
+            return this.$emit('cleared', cache.key);
+          },
+        });
+    },
+    _clearCache(cache) {
+      let scope = this.scope;
+      return of(cache).pipe(
+        concatMap(async (cache) => {
+          if (scope === ActionScope.APPLICATION) {
+            await this.application.clearCache(cache.name, cache.cacheManager);
+          } else {
+            await this.instance.clearCache(cache.name, cache.cacheManager);
+          }
+          return cache.key;
+        }),
+        tap({
+          error: (error) => {
+            console.warn(`Clearing cache ${cache.key} failed:`, error);
+          },
+        }),
+      );
+    },
+  },
+};
 </script>
-<style lang="scss">
-  .caches {
-    td, th {
-      vertical-align: middle;
-    }
-  }
-</style>

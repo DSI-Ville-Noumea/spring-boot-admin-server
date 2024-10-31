@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,19 +19,20 @@ package de.codecentric.boot.admin.server.ui.web.servlet;
 import java.io.IOException;
 import java.util.List;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletRequest;
-
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.FilterConfig;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.util.UrlPathHelper;
 
+import de.codecentric.boot.admin.server.ui.web.HomepageForwardingFilterConfig;
 import de.codecentric.boot.admin.server.ui.web.HomepageForwardingMatcher;
 
 /**
@@ -57,11 +58,14 @@ public class HomepageForwardingFilter implements Filter {
 				(r) -> MediaType.parseMediaTypes(r.getHeader(HttpHeaders.ACCEPT)));
 	}
 
+	public HomepageForwardingFilter(HomepageForwardingFilterConfig filterConfig) {
+		this(filterConfig.getHomepage(), filterConfig.getRoutesIncludes(), filterConfig.getRoutesExcludes());
+	}
+
 	@Override
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
-		if (request instanceof HttpServletRequest) {
-			HttpServletRequest httpRequest = (HttpServletRequest) request;
+		if (request instanceof HttpServletRequest httpRequest) {
 			if (this.matcher.test(httpRequest)) {
 				log.trace("Forwarding request with URL {} to index", httpRequest.getRequestURI());
 				request.getRequestDispatcher(this.homepage).forward(request, response);
@@ -70,6 +74,14 @@ public class HomepageForwardingFilter implements Filter {
 		}
 
 		chain.doFilter(request, response);
+	}
+
+	@Override
+	public void init(FilterConfig filterConfig) {
+	}
+
+	@Override
+	public void destroy() {
 	}
 
 }

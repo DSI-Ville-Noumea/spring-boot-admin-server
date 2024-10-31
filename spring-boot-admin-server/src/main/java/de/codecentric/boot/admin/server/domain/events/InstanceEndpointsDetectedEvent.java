@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,6 +31,8 @@ import de.codecentric.boot.admin.server.domain.values.InstanceId;
 @lombok.ToString(callSuper = true)
 public class InstanceEndpointsDetectedEvent extends InstanceEvent {
 
+	public static final String TYPE = "ENDPOINTS_DETECTED";
+
 	private static final long serialVersionUID = 1L;
 
 	private final Endpoints endpoints;
@@ -40,7 +42,7 @@ public class InstanceEndpointsDetectedEvent extends InstanceEvent {
 	}
 
 	public InstanceEndpointsDetectedEvent(InstanceId instance, long version, Instant timestamp, Endpoints endpoints) {
-		super(instance, version, "ENDPOINTS_DETECTED", timestamp);
+		super(instance, version, TYPE, timestamp);
 		this.endpoints = endpoints;
 	}
 

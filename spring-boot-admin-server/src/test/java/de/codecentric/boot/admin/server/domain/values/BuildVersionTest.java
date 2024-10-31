@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,11 +16,7 @@
 
 package de.codecentric.boot.admin.server.domain.values;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.DocumentContext;
-import com.jayway.jsonpath.JsonPath;
-import org.junit.Test;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.junit.jupiter.api.Test;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -28,22 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class BuildVersionTest {
 
-	private ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
-
 	@Test
 	public void should_return_version() {
+		assertThat(BuildVersion.valueOf(null).getValue()).isEqualTo("UNKNOWN");
 		assertThat(BuildVersion.from(emptyMap())).isNull();
 		assertThat(BuildVersion.from(singletonMap("version", "1.0.0"))).isEqualTo(BuildVersion.valueOf("1.0.0"));
 		assertThat(BuildVersion.from(singletonMap("build.version", "1.0.0"))).isEqualTo(BuildVersion.valueOf("1.0.0"));
 		assertThat(BuildVersion.from(singletonMap("build", singletonMap("version", "1.0.0"))))
-				.isEqualTo(BuildVersion.valueOf("1.0.0"));
-	}
-
-	@Test
-	public void should_serialize_json() throws Exception {
-		String json = objectMapper.writeValueAsString(BuildVersion.valueOf("1.0.0"));
-		DocumentContext doc = JsonPath.parse(json);
-		assertThat(doc.read("$", String.class)).isEqualTo("1.0.0");
+			.isEqualTo(BuildVersion.valueOf("1.0.0"));
 	}
 
 	@Test

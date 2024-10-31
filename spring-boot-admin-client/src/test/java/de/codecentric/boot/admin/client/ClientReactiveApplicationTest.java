@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,8 +16,8 @@
 
 package de.codecentric.boot.admin.client;
 
-import org.junit.After;
-import org.junit.Before;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -26,7 +26,7 @@ public class ClientReactiveApplicationTest extends AbstractClientApplicationTest
 
 	private ConfigurableApplicationContext instance;
 
-	@Before
+	@BeforeEach
 	@Override
 	public void setUp() throws Exception {
 		super.setUp();
@@ -38,7 +38,7 @@ public class ClientReactiveApplicationTest extends AbstractClientApplicationTest
 				"--spring.boot.admin.client.url=" + wireMock.url("/"));
 	}
 
-	@After
+	@AfterEach
 	public void shutdown() {
 		instance.close();
 	}

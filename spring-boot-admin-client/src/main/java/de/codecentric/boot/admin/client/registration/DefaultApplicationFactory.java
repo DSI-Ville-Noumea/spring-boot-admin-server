@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,8 +21,6 @@ import java.net.UnknownHostException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import javax.annotation.Nullable;
-
 import org.springframework.boot.actuate.autoconfigure.endpoint.web.WebEndpointProperties;
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementServerProperties;
 import org.springframework.boot.actuate.endpoint.EndpointId;
@@ -31,6 +29,7 @@ import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.web.context.WebServerInitializedEvent;
 import org.springframework.boot.web.server.Ssl;
 import org.springframework.context.event.EventListener;
+import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -77,37 +76,44 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 
 	@Override
 	public Application createApplication() {
-		return Application.create(getName()).healthUrl(getHealthUrl()).managementUrl(getManagementUrl())
-				.serviceUrl(getServiceUrl()).metadata(getMetadata()).build();
+		return Application.create(getName())
+			.healthUrl(getHealthUrl())
+			.managementUrl(getManagementUrl())
+			.serviceUrl(getServiceUrl())
+			.metadata(getMetadata())
+			.build();
 	}
 
 	protected String getName() {
-		return instance.getName();
+		return this.instance.getName();
 	}
 
 	protected String getServiceUrl() {
-		if (instance.getServiceUrl() != null) {
-			return instance.getServiceUrl();
+		if (this.instance.getServiceUrl() != null) {
+			return this.instance.getServiceUrl();
 		}
 
 		return UriComponentsBuilder.fromUriString(getServiceBaseUrl()).path(getServicePath()).toUriString();
 	}
 
 	protected String getServiceBaseUrl() {
-		String baseUrl = instance.getServiceBaseUrl();
+		String baseUrl = this.instance.getServiceBaseUrl();
 
-		if (!StringUtils.isEmpty(baseUrl)) {
+		if (StringUtils.hasText(baseUrl)) {
 			return baseUrl;
 		}
 
-		return UriComponentsBuilder.newInstance().scheme(getScheme(server.getSsl())).host(getServiceHost())
-				.port(getLocalServerPort()).toUriString();
+		return UriComponentsBuilder.newInstance()
+			.scheme(getScheme(this.server.getSsl()))
+			.host(getServiceHost())
+			.port(getLocalServerPort())
+			.toUriString();
 	}
 
 	protected String getServicePath() {
-		String path = instance.getServicePath();
+		String path = this.instance.getServicePath();
 
-		if (!StringUtils.isEmpty(path)) {
+		if (StringUtils.hasText(path)) {
 			return path;
 		}
 
@@ -115,18 +121,20 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 	}
 
 	protected String getManagementUrl() {
-		if (instance.getManagementUrl() != null) {
-			return instance.getManagementUrl();
+		if (this.instance.getManagementUrl() != null) {
+			return this.instance.getManagementUrl();
 		}
 
-		return UriComponentsBuilder.fromUriString(getManagementBaseUrl()).path("/").path(getEndpointsWebPath())
-				.toUriString();
+		return UriComponentsBuilder.fromUriString(getManagementBaseUrl())
+			.path("/")
+			.path(getEndpointsWebPath())
+			.toUriString();
 	}
 
 	protected String getManagementBaseUrl() {
-		String baseUrl = instance.getManagementBaseUrl();
+		String baseUrl = this.instance.getManagementBaseUrl();
 
-		if (!StringUtils.isEmpty(baseUrl)) {
+		if (StringUtils.hasText(baseUrl)) {
 			return baseUrl;
 		}
 
@@ -134,9 +142,12 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 			return this.getServiceUrl();
 		}
 
-		Ssl ssl = (management.getSsl() != null) ? management.getSsl() : server.getSsl();
-		return UriComponentsBuilder.newInstance().scheme(getScheme(ssl)).host(getManagementHost())
-				.port(getLocalManagementPort()).toUriString();
+		Ssl ssl = (this.management.getSsl() != null) ? this.management.getSsl() : this.server.getSsl();
+		return UriComponentsBuilder.newInstance()
+			.scheme(getScheme(ssl))
+			.host(getManagementHost())
+			.port(getLocalManagementPort())
+			.toUriString();
 	}
 
 	protected boolean isManagementPortEqual() {
@@ -144,26 +155,28 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 	}
 
 	protected String getEndpointsWebPath() {
-		return webEndpoint.getBasePath();
+		return this.webEndpoint.getBasePath();
 	}
 
 	protected String getHealthUrl() {
-		if (instance.getHealthUrl() != null) {
-			return instance.getHealthUrl();
+		if (this.instance.getHealthUrl() != null) {
+			return this.instance.getHealthUrl();
 		}
-		return UriComponentsBuilder.fromHttpUrl(getManagementBaseUrl()).path("/").path(getHealthEndpointPath())
-				.toUriString();
+		return UriComponentsBuilder.fromHttpUrl(getManagementBaseUrl())
+			.path("/")
+			.path(getHealthEndpointPath())
+			.toUriString();
 	}
 
 	protected Map<String, String> getMetadata() {
 		Map<String, String> metadata = new LinkedHashMap<>();
-		metadata.putAll(metadataContributor.getMetadata());
-		metadata.putAll(instance.getMetadata());
+		metadata.putAll(this.metadataContributor.getMetadata());
+		metadata.putAll(this.instance.getMetadata());
 		return metadata;
 	}
 
 	protected String getServiceHost() {
-		InetAddress address = server.getAddress();
+		InetAddress address = this.server.getAddress();
 		if (address == null) {
 			address = getLocalHost();
 		}
@@ -171,7 +184,7 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 	}
 
 	protected String getManagementHost() {
-		InetAddress address = management.getAddress();
+		InetAddress address = this.management.getAddress();
 		if (address != null) {
 			return getHost(address);
 		}
@@ -199,15 +212,15 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 		if (this.localManagementPort == null) {
 			return this.getLocalServerPort();
 		}
-		return localManagementPort;
+		return this.localManagementPort;
 	}
 
 	protected String getHealthEndpointPath() {
-		String health = pathMappedEndpoints.getPath(EndpointId.of("health"));
+		String health = this.pathMappedEndpoints.getPath(EndpointId.of("health"));
 		if (StringUtils.hasText(health)) {
 			return health;
 		}
-		String status = pathMappedEndpoints.getPath(EndpointId.of("status"));
+		String status = this.pathMappedEndpoints.getPath(EndpointId.of("status"));
 		if (StringUtils.hasText(status)) {
 			return status;
 		}
@@ -219,17 +232,29 @@ public class DefaultApplicationFactory implements ApplicationFactory {
 	}
 
 	protected String getHost(InetAddress address) {
-		return instance.isPreferIp() ? address.getHostAddress() : address.getCanonicalHostName();
+		if (this.instance.isPreferIp()) {
+			return address.getHostAddress();
+		}
+
+		switch (this.instance.getServiceHostType()) {
+			case IP:
+				return address.getHostAddress();
+			case HOST_NAME:
+				return address.getHostName();
+			case CANONICAL_HOST_NAME:
+			default:
+				return address.getCanonicalHostName();
+		}
 	}
 
 	@EventListener
 	public void onWebServerInitialized(WebServerInitializedEvent event) {
 		String name = event.getApplicationContext().getServerNamespace();
 		if ("server".equals(name) || !StringUtils.hasText(name)) {
-			localServerPort = event.getWebServer().getPort();
+			this.localServerPort = event.getWebServer().getPort();
 		}
 		else if ("management".equals(name)) {
-			localManagementPort = event.getWebServer().getPort();
+			this.localManagementPort = event.getWebServer().getPort();
 		}
 	}
 

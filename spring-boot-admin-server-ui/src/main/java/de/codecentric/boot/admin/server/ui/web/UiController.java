@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2024 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,44 +19,41 @@ package de.codecentric.boot.admin.server.ui.web;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-
-import javax.annotation.Nullable;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
-import org.springframework.boot.context.properties.ConstructorBinding;
+import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.util.UriComponents;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import de.codecentric.boot.admin.server.ui.config.AdminServerUiProperties.PollTimer;
+import de.codecentric.boot.admin.server.ui.config.AdminServerUiProperties.UiTheme;
 import de.codecentric.boot.admin.server.ui.extensions.UiExtension;
+import de.codecentric.boot.admin.server.ui.extensions.UiExtensions;
 import de.codecentric.boot.admin.server.web.AdminController;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
+import static org.springframework.util.CollectionUtils.isEmpty;
 
 @AdminController
 public class UiController {
 
 	private final String publicUrl;
 
-	private final List<UiExtension> cssExtensions;
-
-	private final List<UiExtension> jsExtensions;
+	private final UiExtensions uiExtensions;
 
 	private final Settings uiSettings;
 
-	public UiController(String publicUrl, List<UiExtension> uiExtensions, Settings uiSettings) {
+	public UiController(String publicUrl, UiExtensions uiExtensions, Settings uiSettings) {
 		this.publicUrl = publicUrl;
+		this.uiExtensions = uiExtensions;
 		this.uiSettings = uiSettings;
-		this.cssExtensions = uiExtensions.stream().filter((e) -> e.getResourcePath().endsWith(".css"))
-				.collect(Collectors.toList());
-		this.jsExtensions = uiExtensions.stream().filter((e) -> e.getResourcePath().endsWith(".js"))
-				.collect(Collectors.toList());
 	}
 
 	@ModelAttribute(value = "baseUrl", binding = false)
@@ -84,12 +81,12 @@ public class UiController {
 
 	@ModelAttribute(value = "cssExtensions", binding = false)
 	public List<UiExtension> getCssExtensions() {
-		return this.cssExtensions;
+		return this.uiExtensions.getCssExtensions();
 	}
 
 	@ModelAttribute(value = "jsExtensions", binding = false)
 	public List<UiExtension> getJsExtensions() {
-		return this.jsExtensions;
+		return this.uiExtensions.getJsExtensions();
 	}
 
 	@ModelAttribute(value = "user", binding = false)
@@ -101,6 +98,7 @@ public class UiController {
 	}
 
 	@GetMapping(path = "/", produces = MediaType.TEXT_HTML_VALUE)
+	@RegisterReflectionForBinding(String.class)
 	public String index() {
 		return "index";
 	}
@@ -108,6 +106,11 @@ public class UiController {
 	@GetMapping(path = "/sba-settings.js", produces = "application/javascript")
 	public String sbaSettings() {
 		return "sba-settings.js";
+	}
+
+	@GetMapping(path = "/variables.css", produces = "text/css")
+	public String variablesCss() {
+		return "variables.css";
 	}
 
 	@GetMapping(path = "/login", produces = MediaType.TEXT_HTML_VALUE)
@@ -129,19 +132,30 @@ public class UiController {
 
 		private final String faviconDanger;
 
+		private final PollTimer pollTimer;
+
+		private final UiTheme theme;
+
 		private final boolean notificationFilterEnabled;
 
 		private final boolean rememberMeEnabled;
+
+		private final List<String> availableLanguages;
 
 		private final List<String> routes;
 
 		private final List<ExternalView> externalViews;
 
+		private final List<ViewSettings> viewSettings;
+
+		private final Boolean enableToasts;
+
+		private final Boolean hideInstanceUrl;
+
 	}
 
 	@lombok.Data
 	@JsonInclude(Include.NON_EMPTY)
-	@ConstructorBinding
 	public static class ExternalView {
 
 		/**
@@ -164,13 +178,43 @@ public class UiController {
 		 */
 		private final boolean iframe;
 
-		public ExternalView(String label, String url, Integer order, boolean iframe) {
+		/**
+		 * A list of child views.
+		 */
+		private final List<ExternalView> children;
+
+		public ExternalView(String label, String url, Integer order, boolean iframe, List<ExternalView> children) {
 			Assert.hasText(label, "'label' must not be empty");
-			Assert.hasText(url, "'url' must not be empty");
+			if (isEmpty(children)) {
+				Assert.hasText(url, "'url' must not be empty");
+			}
 			this.label = label;
 			this.url = url;
 			this.order = order;
 			this.iframe = iframe;
+			this.children = children;
+		}
+
+	}
+
+	@lombok.Data
+	@JsonInclude(Include.NON_EMPTY)
+	public static class ViewSettings {
+
+		/**
+		 * Name of the view to address.
+		 */
+		private final String name;
+
+		/**
+		 * Set view enabled.
+		 */
+		private boolean enabled;
+
+		public ViewSettings(String name, boolean enabled) {
+			Assert.hasText(name, "'name' must not be empty");
+			this.name = name;
+			this.enabled = enabled;
 		}
 
 	}

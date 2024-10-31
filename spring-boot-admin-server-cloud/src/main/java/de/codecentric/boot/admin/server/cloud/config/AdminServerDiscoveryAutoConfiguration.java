@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,14 +18,18 @@ package de.codecentric.boot.admin.server.cloud.config;
 
 import com.netflix.discovery.EurekaClient;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
-import org.springframework.cloud.kubernetes.discovery.KubernetesDiscoveryClient;
+import org.springframework.cloud.kubernetes.client.discovery.KubernetesInformerDiscoveryClient;
+import org.springframework.cloud.kubernetes.commons.discovery.KubernetesDiscoveryProperties;
+import org.springframework.cloud.kubernetes.fabric8.discovery.KubernetesDiscoveryClient;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
 import de.codecentric.boot.admin.server.cloud.discovery.DefaultServiceInstanceConverter;
@@ -79,13 +83,32 @@ public class AdminServerDiscoveryAutoConfiguration {
 
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnMissingBean({ ServiceInstanceConverter.class })
-	@ConditionalOnBean(KubernetesDiscoveryClient.class)
+	@Conditional(KubernetesDiscoveryClientCondition.class)
 	public static class KubernetesConverterConfiguration {
 
 		@Bean
 		@ConfigurationProperties(prefix = "spring.boot.admin.discovery.converter")
-		public KubernetesServiceInstanceConverter serviceInstanceConverter() {
-			return new KubernetesServiceInstanceConverter();
+		public KubernetesServiceInstanceConverter serviceInstanceConverter(
+				KubernetesDiscoveryProperties discoveryProperties) {
+			return new KubernetesServiceInstanceConverter(discoveryProperties);
+		}
+
+	}
+
+	private static class KubernetesDiscoveryClientCondition extends AnyNestedCondition {
+
+		KubernetesDiscoveryClientCondition() {
+			super(ConfigurationPhase.REGISTER_BEAN);
+		}
+
+		@ConditionalOnBean(KubernetesInformerDiscoveryClient.class)
+		static class OfficialKubernetesCondition {
+
+		}
+
+		@ConditionalOnBean(KubernetesDiscoveryClient.class)
+		static class Fabric8KubernetesCondition {
+
 		}
 
 	}

@@ -15,100 +15,120 @@
   -->
 
 <template>
-  <section class="section" :class="{ 'is-loading' : !hasLoaded }">
-    <template v-if="hasLoaded">
-      <div v-if="error" class="message is-danger">
-        <div class="message-body">
-          <strong>
-            <font-awesome-icon class="has-text-danger" icon="exclamation-triangle" />
-            <span v-text="$t('instances.mappings.fetch_failed')" />
-          </strong>
-          <p v-text="error.message" />
-        </div>
-      </div>
-      <div v-if="isOldMetrics" class="message is-warning">
-        <div class="message-body" v-text="$t('instances.mappings.mappings_not_supported_spring_boot_1')" />
-      </div>
-      <template v-for="(context, ctxName) in contexts">
-        <h3 class="title" v-text="ctxName" :key="ctxName" />
-
-        <dispatcher-mappings v-if="!isEmpty(context.mappings.dispatcherServlets)"
-                             :key="`${ctxName}_dispatcherServlets`"
-                             :dispatchers="context.mappings.dispatcherServlets"
+  <sba-instance-section :error="error" :loading="!hasLoaded">
+    <div v-if="isOldMetrics" class="message is-warning">
+      <div
+        class="message-body"
+        v-text="$t('instances.mappings.mappings_not_supported_spring_boot_1')"
+      />
+    </div>
+    <template v-for="(context, ctxName) in contexts" :key="ctxName">
+      <sba-panel :seamless="true" :title="ctxName">
+        <dispatcher-mappings
+          v-if="hasDispatcherServlets(context)"
+          :key="`${ctxName}_dispatcherServlets`"
+          :dispatchers="context.mappings.dispatcherServlets"
         />
 
-        <dispatcher-mappings v-if="!isEmpty(context.mappings.dispatcherHandlers)"
-                             :key="`${ctxName}_dispatcherHandlers`"
-                             :dispatchers="context.mappings.dispatcherHandlers"
+        <dispatcher-mappings
+          v-if="hasDispatcherHandlers(context)"
+          :key="`${ctxName}_dispatcherHandlers`"
+          :dispatchers="context.mappings.dispatcherHandlers"
         />
 
-        <servlet-mappings :key="`${ctxName}_servlets`"
-                          :servlets="context.mappings.servlets"
+        <servlet-mappings
+          v-if="hasServlet(context)"
+          :key="`${ctxName}_servlets`"
+          :servlets="context.mappings.servlets"
         />
 
-        <servlet-filter-mappings :key="`${ctxName}_servletFilters`"
-                                 :servlet-filters="context.mappings.servletFilters"
+        <servlet-filter-mappings
+          v-if="hasServletFilters(context)"
+          :key="`${ctxName}_servletFilters`"
+          :servlet-filters="context.mappings.servletFilters"
         />
-      </template>
+      </sba-panel>
     </template>
-  </section>
+  </sba-instance-section>
 </template>
 
 <script>
-  import Instance from '@/services/instance';
-  import DispatcherMappings from '@/views/instances/mappings/DispatcherMappings';
-  import ServletFilterMappings from '@/views/instances/mappings/ServletFilterMappings';
-  import ServletMappings from '@/views/instances/mappings/ServletMappings';
-  import isEmpty from 'lodash/isEmpty';
-  import {VIEW_GROUP} from '../../index';
+import SbaPanel from '@/components/sba-panel';
 
-  export default {
-    components: {DispatcherMappings, ServletMappings, ServletFilterMappings},
-    props: {
-      instance: {
-        type: Instance,
-        required: true
-      }
+import Instance from '@/services/instance';
+import { VIEW_GROUP } from '@/views/ViewGroup';
+import DispatcherMappings from '@/views/instances/mappings/DispatcherMappings';
+import ServletFilterMappings from '@/views/instances/mappings/ServletFilterMappings';
+import ServletMappings from '@/views/instances/mappings/ServletMappings';
+import SbaInstanceSection from '@/views/instances/shell/sba-instance-section';
+
+export default {
+  components: {
+    SbaPanel,
+    SbaInstanceSection,
+    DispatcherMappings,
+    ServletMappings,
+    ServletFilterMappings,
+  },
+  props: {
+    instance: {
+      type: Instance,
+      required: true,
     },
-    data: () => ({
-      hasLoaded: false,
-      error: null,
-      contexts: null,
-      isOldMetrics: false
-    }),
-    created() {
-      this.fetchMappings();
+  },
+  data: () => ({
+    hasLoaded: false,
+    error: null,
+    contexts: null,
+    isOldMetrics: false,
+  }),
+  created() {
+    this.fetchMappings();
+  },
+  methods: {
+    hasDispatcherServlets(context) {
+      return context?.mappings?.dispatcherServlets !== undefined;
     },
-    computed: {},
-    methods: {
-      isEmpty,
-      async fetchMappings() {
-        this.error = null;
-        try {
-          const res = await this.instance.fetchMappings();
-          if (res.headers['content-type'].includes('application/vnd.spring-boot.actuator.v2')) {
-            this.contexts = res.data.contexts;
-          } else {
-            this.isOldMetrics = true;
-          }
-        } catch (error) {
-          console.warn('Fetching mappings failed:', error);
-          this.error = error;
+    hasDispatcherHandlers(context) {
+      return context?.mappings?.dispatcherHandlers !== undefined;
+    },
+    hasServlet(context) {
+      return context?.mappings?.servlets !== undefined;
+    },
+    hasServletFilters(context) {
+      return context?.mappings?.servletFilters !== undefined;
+    },
+    async fetchMappings() {
+      this.error = null;
+      try {
+        const res = await this.instance.fetchMappings();
+        if (
+          res.headers['content-type'].includes(
+            'application/vnd.spring-boot.actuator.v2',
+          )
+        ) {
+          this.contexts = res.data.contexts;
+        } else {
+          this.isOldMetrics = true;
         }
-        this.hasLoaded = true;
+      } catch (error) {
+        console.warn('Fetching mappings failed:', error);
+        this.error = error;
       }
+      this.hasLoaded = true;
     },
-    install({viewRegistry}) {
-      viewRegistry.addView({
-        name: 'instances/mappings',
-        parent: 'instances',
-        path: 'mappings',
-        label: 'instances.mappings.label',
-        group: VIEW_GROUP.WEB,
-        component: this,
-        order: 450,
-        isEnabled: ({instance}) => instance.hasEndpoint('mappings')
-      });
-    }
-  }
+  },
+  install({ viewRegistry }) {
+    viewRegistry.addView({
+      name: 'instances/mappings',
+      parent: 'instances',
+      path: 'mappings',
+      label: 'instances.mappings.label',
+      group: VIEW_GROUP.WEB,
+      component: this,
+      order: 450,
+      isEnabled: ({ instance }) => instance.hasEndpoint('mappings'),
+    });
+  },
+};
 </script>

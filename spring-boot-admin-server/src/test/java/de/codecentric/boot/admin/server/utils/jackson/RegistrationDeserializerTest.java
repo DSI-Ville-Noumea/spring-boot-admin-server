@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,25 +18,22 @@ package de.codecentric.boot.admin.server.utils.jackson;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.json.JSONObject;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 import de.codecentric.boot.admin.server.domain.values.Registration;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class RegistrationDeserializerTest {
 
 	private final ObjectMapper objectMapper;
 
 	public RegistrationDeserializerTest() {
-		SimpleModule module = new SimpleModule();
-		module.addDeserializer(Registration.class, new RegistrationDeserializer());
-		module.setSerializerModifier(
-				new RegistrationBeanSerializerModifier(new SanitizingMapSerializer(new String[] { ".*password$" })));
+		AdminServerModule module = new AdminServerModule(new String[] { ".*password$" });
 		objectMapper = Jackson2ObjectMapperBuilder.json().modules(module).build();
 	}
 
@@ -52,9 +49,12 @@ public class RegistrationDeserializerTest {
 
 	@Test
 	public void test_1_4_json_format() throws Exception {
-		String json = new JSONObject().put("name", "test").put("managementUrl", "http://test")
-				.put("healthUrl", "http://health").put("serviceUrl", "http://service")
-				.put("statusInfo", new JSONObject().put("status", "UNKNOWN")).toString();
+		String json = new JSONObject().put("name", "test")
+			.put("managementUrl", "http://test")
+			.put("healthUrl", "http://health")
+			.put("serviceUrl", "http://service")
+			.put("statusInfo", new JSONObject().put("status", "UNKNOWN"))
+			.toString();
 		Registration value = objectMapper.readValue(json, Registration.class);
 		assertThat(value.getName()).isEqualTo("test");
 		assertThat(value.getManagementUrl()).isEqualTo("http://test");
@@ -64,9 +64,12 @@ public class RegistrationDeserializerTest {
 
 	@Test
 	public void test_1_5_json_format() throws Exception {
-		String json = new JSONObject().put("name", "test").put("managementUrl", "http://test")
-				.put("healthUrl", "http://health").put("serviceUrl", "http://service")
-				.put("metadata", new JSONObject().put("labels", "foo,bar")).toString();
+		String json = new JSONObject().put("name", "test")
+			.put("managementUrl", "http://test")
+			.put("healthUrl", "http://health")
+			.put("serviceUrl", "http://service")
+			.put("metadata", new JSONObject().put("labels", "foo,bar"))
+			.toString();
 		Registration value = objectMapper.readValue(json, Registration.class);
 		assertThat(value.getName()).isEqualTo("test");
 		assertThat(value.getManagementUrl()).isEqualTo("http://test");
@@ -85,24 +88,35 @@ public class RegistrationDeserializerTest {
 		assertThat(value.getServiceUrl()).isNull();
 	}
 
-	@Test(expected = IllegalArgumentException.class)
+	@Test
 	public void test_name_expected() throws Exception {
-		String json = new JSONObject().put("name", "").put("managementUrl", "http://test")
-				.put("healthUrl", "http://health").put("serviceUrl", "http://service").toString();
-		objectMapper.readValue(json, Registration.class);
+		String json = new JSONObject().put("name", "")
+			.put("managementUrl", "http://test")
+			.put("healthUrl", "http://health")
+			.put("serviceUrl", "http://service")
+			.toString();
+
+		assertThatThrownBy(() -> objectMapper.readValue(json, Registration.class))
+			.isInstanceOf(IllegalArgumentException.class);
 	}
 
-	@Test(expected = IllegalArgumentException.class)
+	@Test
 	public void test_healthUrl_expected() throws Exception {
-		String json = new JSONObject().put("name", "test").put("managementUrl", "http://test").put("healthUrl", "")
-				.put("serviceUrl", "http://service").toString();
-		objectMapper.readValue(json, Registration.class);
+		String json = new JSONObject().put("name", "test")
+			.put("managementUrl", "http://test")
+			.put("healthUrl", "")
+			.put("serviceUrl", "http://service")
+			.toString();
+		assertThatThrownBy(() -> objectMapper.readValue(json, Registration.class))
+			.isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test
 	public void test_sanitize_metadata() throws JsonProcessingException {
-		Registration app = Registration.create("test", "http://health").metadata("PASSWORD", "qwertz123")
-				.metadata("user", "humptydumpty").build();
+		Registration app = Registration.create("test", "http://health")
+			.metadata("PASSWORD", "qwertz123")
+			.metadata("user", "humptydumpty")
+			.build();
 		String json = objectMapper.writeValueAsString(app);
 
 		assertThat(json).doesNotContain("qwertz123");

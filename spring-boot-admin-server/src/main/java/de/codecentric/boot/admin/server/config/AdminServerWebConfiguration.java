@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,13 +26,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.accept.ContentNegotiationManager;
 import org.springframework.web.reactive.accept.RequestedContentTypeResolver;
 
-import de.codecentric.boot.admin.server.domain.values.Registration;
 import de.codecentric.boot.admin.server.eventstore.InstanceEventStore;
 import de.codecentric.boot.admin.server.services.ApplicationRegistry;
 import de.codecentric.boot.admin.server.services.InstanceRegistry;
-import de.codecentric.boot.admin.server.utils.jackson.RegistrationBeanSerializerModifier;
-import de.codecentric.boot.admin.server.utils.jackson.RegistrationDeserializer;
-import de.codecentric.boot.admin.server.utils.jackson.SanitizingMapSerializer;
+import de.codecentric.boot.admin.server.utils.jackson.AdminServerModule;
 import de.codecentric.boot.admin.server.web.ApplicationsController;
 import de.codecentric.boot.admin.server.web.InstancesController;
 import de.codecentric.boot.admin.server.web.client.InstanceWebClient;
@@ -48,11 +45,7 @@ public class AdminServerWebConfiguration {
 
 	@Bean
 	public SimpleModule adminJacksonModule() {
-		SimpleModule module = new SimpleModule();
-		module.addDeserializer(Registration.class, new RegistrationDeserializer());
-		module.setSerializerModifier(new RegistrationBeanSerializerModifier(
-				new SanitizingMapSerializer(this.adminServerProperties.getMetadataKeysToSanitize())));
-		return module;
+		return new AdminServerModule(this.adminServerProperties.getMetadataKeysToSanitize());
 	}
 
 	@Bean
@@ -102,11 +95,11 @@ public class AdminServerWebConfiguration {
 	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 	@AutoConfigureAfter(WebMvcAutoConfiguration.class)
-	public static class ServletRestApiConfirguation {
+	public static class ServletRestApiConfiguration {
 
 		private final AdminServerProperties adminServerProperties;
 
-		public ServletRestApiConfirguation(AdminServerProperties adminServerProperties) {
+		public ServletRestApiConfiguration(AdminServerProperties adminServerProperties) {
 			this.adminServerProperties = adminServerProperties;
 		}
 

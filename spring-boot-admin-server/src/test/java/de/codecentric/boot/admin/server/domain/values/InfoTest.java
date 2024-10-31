@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2018 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,37 +16,16 @@
 
 package de.codecentric.boot.admin.server.domain.values;
 
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.DocumentContext;
-import com.jayway.jsonpath.JsonPath;
-import org.junit.Test;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.assertj.core.data.MapEntry;
+import org.junit.jupiter.api.Test;
 
-import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class InfoTest {
-
-	private ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
-
-	@Test
-	public void should_serialize_json() throws Exception {
-		Map<String, Object> values = new HashMap<>();
-		values.put("foo", "bar");
-		values.put("build", singletonMap("version", "1.0.0"));
-		Info info = Info.from(values);
-		String json = objectMapper.writeValueAsString(info);
-
-		DocumentContext doc = JsonPath.parse(json);
-
-		assertThat(doc.read("$.foo", String.class)).isEqualTo("bar");
-		assertThat(doc.read("$.build.version", String.class)).isEqualTo("1.0.0");
-	}
 
 	@Test
 	public void should_keep_order() {
@@ -54,10 +33,10 @@ public class InfoTest {
 		map.put("z", "1");
 		map.put("x", "2");
 
-		Iterator<?> iter = Info.from(map).getValues().entrySet().iterator();
+		Iterator<Map.Entry<String, Object>> iterator = Info.from(map).getValues().entrySet().iterator();
 
-		assertThat(iter.next()).hasFieldOrPropertyWithValue("key", "z").hasFieldOrPropertyWithValue("value", "1");
-		assertThat(iter.next()).hasFieldOrPropertyWithValue("key", "x").hasFieldOrPropertyWithValue("value", "2");
+		assertThat(iterator.next()).isEqualTo(MapEntry.entry("z", "1"));
+		assertThat(iterator.next()).isEqualTo(MapEntry.entry("x", "2"));
 	}
 
 }

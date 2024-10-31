@@ -1,11 +1,11 @@
 /*
- * Copyright 2014-2019 the original author or authors.
+ * Copyright 2014-2023 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,9 @@
 
 package de.codecentric.boot.admin.server.domain.entities;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -41,20 +41,20 @@ import static org.mockito.Mockito.when;
 public class SnapshottingInstanceRepositoryTest extends AbstractInstanceRepositoryTest {
 
 	private final Instance instance = Instance.create(InstanceId.of("app-1"))
-			.register(Registration.create("app", "http://health").build());
+		.register(Registration.create("app", "http://health").build());
 
 	private InMemoryEventStore eventStore = spy(new InMemoryEventStore());
 
 	private SnapshottingInstanceRepository repository;
 
-	@Before
+	@BeforeEach
 	public void setUp() {
 		this.repository = new SnapshottingInstanceRepository(this.eventStore);
 		this.repository.start();
 		super.setUp(this.repository);
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() {
 		this.repository.stop();
 	}
@@ -96,7 +96,8 @@ public class SnapshottingInstanceRepositoryTest extends AbstractInstanceReposito
 		reset(this.eventStore);
 		StepVerifier.create(this.repository.find(this.instance.getId())).expectNext(this.instance).verifyComplete();
 		StepVerifier.create(this.repository.find(InstanceId.of("broken")))
-				.assertNext((i) -> assertThat(i.getVersion()).isEqualTo(1L)).verifyComplete();
+			.assertNext((i) -> assertThat(i.getVersion()).isEqualTo(1L))
+			.verifyComplete();
 	}
 
 	@Test
@@ -115,13 +116,15 @@ public class SnapshottingInstanceRepositoryTest extends AbstractInstanceReposito
 		StepVerifier.create(this.repository.save(this.instance)).expectNextCount(1L).verifyComplete();
 		this.repository.stop();
 		StepVerifier
-				.create(this.repository.save(this.instance.clearUnsavedEvents().withStatusInfo(StatusInfo.ofDown())))
-				.expectNextCount(1L).verifyComplete();
+			.create(this.repository.save(this.instance.clearUnsavedEvents().withStatusInfo(StatusInfo.ofDown())))
+			.expectNextCount(1L)
+			.verifyComplete();
 		// when
 		StepVerifier
-				.create(this.repository.computeIfPresent(this.instance.getId(),
-						(id, i) -> Mono.just(i.withStatusInfo(StatusInfo.ofUp()))))
-				.expectNextCount(1L).verifyComplete();
+			.create(this.repository.computeIfPresent(this.instance.getId(),
+					(id, i) -> Mono.just(i.withStatusInfo(StatusInfo.ofUp()))))
+			.expectNextCount(1L)
+			.verifyComplete();
 	}
 
 }
